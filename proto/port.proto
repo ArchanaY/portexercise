@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+option go_package = ".;proto";
+
+package proto;
+
+service PortDomain {    
+    rpc Upsert (stream PortInfo) returns (UpsertReply) {}
+    rpc Read (ReadRequest) returns (stream PortInfo) {}
+}
+
+message PortInfo {
+    string key = 1;
+    string name = 2;
+    string city = 3;
+    string country = 4;
+    repeated string alias = 5;
+    repeated string regions = 6;
+    repeated double coordinates = 7;     
+    string province = 8;
+    string timezone = 9;
+    repeated string unlocs = 10;
+    string code = 11;
+}
+
+// Status response from an Upsert
+message UpsertReply {
+    string status = 1;
+}
+
+message ReadRequest {
+    string identifier = 1;
+}
