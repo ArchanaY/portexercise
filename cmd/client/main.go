@@ -48,8 +48,8 @@ func main() {
 	router := mux.NewRouter()
 
 	router.Methods("GET").Path("/heartbeat").HandlerFunc(rf.RespondToHeartBeat)
-	//router.Methods("POST").Path("/port").HandlerFunc(rf.PostHandler)
-	//router.Methods("GET").Path("/port/{port}").HandlerFunc(rf.GetHanlder)
+	router.Methods("POST").Path("/port").HandlerFunc(rf.PostHandler)
+	router.Methods("GET").Path("/port/{port}").HandlerFunc(rf.GetHanlder)
 
 	go func() {
 		log.Println("client starting")

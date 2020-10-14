@@ -3,6 +3,7 @@ module portexercise
 go 1.14
 
 require (
+	github.com/apex/log v1.9.0
 	github.com/golang/protobuf v1.4.2
 	github.com/gorilla/mux v1.8.0
 	google.golang.org/grpc v1.33.0

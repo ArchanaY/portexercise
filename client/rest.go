@@ -2,8 +2,13 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
+	"runtime/debug"
+
+	"github.com/apex/log"
+	"github.com/gorilla/mux"
 )
 
 type Rester interface {
@@ -27,7 +32,55 @@ func (rf Framework) RespondToHeartBeat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (rf Framework) PostHandler(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if e := recover(); e != nil {
+			errStr := fmt.Errorf("%v", e)
+			debugStack := string(debug.Stack())
+			log.Error(errStr.Error())
+			fmt.Println(debugStack)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}()
+
+	err := rf.pc.Upsert(context.TODO(), r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Error(err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+
 }
 
 func (rf Framework) GetHanlder(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if e := recover(); e != nil {
+			errStr := fmt.Errorf("%v", e)
+			debugStack := string(debug.Stack())
+			log.Error(errStr.Error())
+			fmt.Println(debugStack)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}()
+
+	params := mux.Vars(r)
+	port := params["port"]
+
+	body, err := rf.pc.Fetch(context.TODO(), port)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Errorf("Failed to fetch port: %v", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+
+	if body != nil {
+		defer body.Close()
+		_, err := io.Copy(w, body)
+		if err != nil {
+			log.Error(err.Error())
+		}
+	}
 }
