@@ -1,101 +1,122 @@
-package client
+package service
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
+	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"portexercise/proto"
+	"portexercise/service/domain"
 
-	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
-type ProtoClient struct {
-	cc proto.PortDomainClient
+type Storer interface {
+	Insert(ctx context.Context, pi domain.Port) error
+	Fetch(ctx context.Context, key string) (domain.Port, error)
 }
 
-// NewProtoClient ...
-func NewProtoClient(cc *grpc.ClientConn) *ProtoClient {
-	service := proto.NewPortDomainClient(cc)
-	return &ProtoClient{service}
+type PortServer struct {
+	store Storer
 }
 
-func (pc ProtoClient) Upsert(ctx context.Context, r io.ReadCloser) error {
-	dec := json.NewDecoder(r)
-	// read open bracket
-	_, err := dec.Token()
+func NewPortServer(s Storer) *PortServer {
+	return &PortServer{s}
+}
+
+func (ps *PortServer) Upsert(stream proto.PortDomain_UpsertServer) error {
+	for {
+		err := contextError(stream.Context())
+		if err != nil {
+			return err
+		}
+
+		req, err := stream.Recv()
+
+		if err == io.EOF {
+			log.Println("No more data")
+			break
+		}
+
+		if err != nil {
+			return logError(status.Errorf(codes.Unknown, "Cannot receive port info"))
+		}
+
+		port := domain.Port{
+			Key:         req.GetKey(),
+			Name:        req.GetName(),
+			City:        req.GetCity(),
+			Country:     req.GetCountry(),
+			Alias:       req.GetAlias(),
+			Regions:     req.GetRegions(),
+			Coordinates: req.GetCoordinates(),
+			Province:    req.GetProvince(),
+			Timezone:    req.GetTimezone(),
+			Unlocs:      req.GetUnlocs(),
+			Code:        req.GetCode(),
+		}
+
+		err = ps.store.Insert(stream.Context(), port)
+		if err != nil {
+			err = logError(status.Errorf(codes.Unknown, "Unable to add entry for port %v", port.Key))
+			fmt.Println(err)
+		}
+	}
+
+	res := &proto.UpsertReply{
+		Status: "OK",
+	}
+
+	err := stream.SendAndClose(res)
 	if err != nil {
-		log.Println("dec.Token failed to read opener", err)
-		return err
-	}
-	var stream proto.PortDomain_UpsertClient
-	for dec.More() {
-		port := &proto.PortInfo{}
-		key, err := dec.Token()
-		if err != nil {
-			log.Println("Failed to decode input stream", err)
-			return err
-		}
-		err = dec.Decode(&port)
-		if err != nil {
-			log.Println("Failed to decode JSON body", err)
-			return err
-		}
-		port.Key = key.(string)
-
-		stream, err = pc.cc.Upsert(ctx)
-		if err != nil {
-			log.Println("Cannot cannot stream: ", err)
-			return err
-		}
-
-		err = stream.Send(port)
-		if err != nil {
-			log.Println("Cannot send port info to server: ", err, stream.RecvMsg(nil))
-			return err
-		}
+		return logError(status.Errorf(codes.Unknown, "cannot send response: %v", err))
 	}
 
-	res, err := stream.CloseAndRecv()
-	if err != nil {
-		log.Println("Cannot receive response: ", err)
-		return err
-	}
-
-	log.Printf("Retured status: %s\n", res.GetStatus())
 	return nil
 }
 
-func (pc ProtoClient) Fetch(ctx context.Context, key string) (io.ReadCloser, error) {
-	req := &proto.ReadRequest{Identifier: key}
-	stream, err := pc.cc.Read(ctx, req)
+func (ps *PortServer) Read(rr *proto.ReadRequest, stream proto.PortDomain_ReadServer) error {
+	p, err := ps.store.Fetch(context.Background(), rr.GetIdentifier())
 	if err != nil {
-		log.Println("cannot find: ", err)
-		return nil, err
+		return err
 	}
 
-	var res *proto.PortInfo
-	var b []byte
-	for {
-		res, err = stream.Recv()
-
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			log.Println("cannot receive response: ", err)
-			return nil, err
-		}
-
-		b, err = json.Marshal(res)
-		if err != nil {
-			log.Printf("Json marshal failed: %s\n", err.Error())
-			return nil, err
-		}
-		//fmt.Println(string(b))
+	pi := &proto.PortInfo{
+		Key:         p.Key,
+		Name:        p.Name,
+		City:        p.City,
+		Country:     p.Country,
+		Alias:       p.Alias,
+		Regions:     p.Regions,
+		Coordinates: p.Coordinates,
+		Province:    p.Province,
+		Timezone:    p.Timezone,
+		Unlocs:      p.Unlocs,
+		Code:        p.Code,
+	}
+	err = stream.Send(pi)
+	if err != nil {
+		return err
 	}
 
-	return ioutil.NopCloser(bytes.NewReader(b)), nil
+	return nil
+}
+
+func contextError(ctx context.Context) error {
+	switch ctx.Err() {
+	case context.Canceled:
+		return logError(status.Error(codes.Canceled, "request is canceled"))
+	case context.DeadlineExceeded:
+		return logError(status.Error(codes.DeadlineExceeded, "deadline is exceeded"))
+	default:
+		return nil
+	}
+}
+
+func logError(err error) error {
+	if err != nil {
+		log.Fatal(err)
+	}
+	return err
 }
