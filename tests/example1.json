@@ -1,0 +1,36 @@
+{
+	"key1": {
+	  "name": "name1",
+	  "city": "city1",
+	  "country": "country1",
+	  "alias": [],
+	  "regions": [],
+	  "coordinates": [
+		1.1111111,
+		2.2222222
+	  ],
+	  "province": "province1",
+	  "timezone": "timezone1",
+	  "unlocs": [
+		"key1"
+	  ],
+	  "code": "code1"
+	},
+	"key2": {
+		"name": "name2",
+		"city": "city2",
+		"country": "country2",
+		"alias": ["alias2"],
+		"regions": ["region2"],
+		"coordinates": [
+		  3.3333333,
+		  4.4444444
+		],
+		"province": "province2",
+		"timezone": "timezone2",
+		"unlocs": [
+		  "key2"
+		],
+		"code": "code2"
+	}
+}
