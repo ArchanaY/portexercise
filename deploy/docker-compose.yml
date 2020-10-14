@@ -1,0 +1,20 @@
+version: '3.6'
+
+services:
+  client:
+    build:
+      context: ../
+      dockerfile: ./build/client/Dockerfile
+    container_name: client
+    ports:
+      - "8080:8080"
+    depends_on:
+      - server
+ 
+  server:
+    build:
+      context: ../
+      dockerfile: ./build/server/Dockerfile
+    container_name: server
+    ports:
+      - "9000:9000"
